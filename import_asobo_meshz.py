@@ -2,7 +2,7 @@ import bpy
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 from bpy.types import Operator
-import io, struct, collections, math
+import io, struct, collections, math, numpy
 
 
 def snorm16_to_float(x):
@@ -10,18 +10,10 @@ def snorm16_to_float(x):
 
 
 def normalize_qtangent(qtangent):
-    (i, j, k, w) = qtangent
-    length = math.sqrt(i * i + j * j + k * k + w * w)
-    if length != 0:
-        return [x/length for x in qtangent]
-    else:
-        return qtangent
-
-
-def cross(a, b):
-    return (a[1]*b[2] - a[2]*b[1],
-         a[2]*b[0] - a[0]*b[2],
-         a[0]*b[1] - a[1]*b[0])
+    norm = numpy.linalg.norm(qtangent)
+    if norm != 0:
+        return qtangent / norm
+    return qtangent
 
 
 def decode_qtangent(qtangent):
@@ -42,15 +34,18 @@ def decode_qtangent(qtangent):
      
     normal = (1.0-(fTyy+fTzz), fTxy+fTwz, fTxz-fTwy)
     tangent = ( fTxy-fTwz, 1.0-(fTxx+fTzz), fTyz+fTwx )
-    bitangent = cross(normal, tangent)
-    bitangent = [x * math.copysign(1, w) for x in bitangent]
+    bitangent = numpy.cross(normal, tangent) * numpy.sign(w)
     
     return normal, tangent, bitangent
 
 class MeshZ:
+    cylindre_cols = []
+    unknown7s = []
     vertex_buffers = []
     index_buffers = []
     unknown12s = []
+    unknown16s = []
+    unknown15s = []
     
     def __init__(self, data):
         # Header
@@ -98,11 +93,26 @@ class MeshZ:
         print(material_crc32_count)
         
         cylindre_col_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-        bs.seek(cylindre_col_count * 8 * 4, io.SEEK_CUR)
+        for i in range(0, cylindre_col_count):
+            [x] = struct.unpack('<f', bs.read(4))
+            [y] = struct.unpack('<f', bs.read(4))
+            [z] = struct.unpack('<f', bs.read(4))
+            self.cylindre_cols.append((x,y,z))
+            bs.seek(2 * 2, io.SEEK_CUR)
+            [x] = struct.unpack('<f', bs.read(4))
+            [y] = struct.unpack('<f', bs.read(4))
+            [z] = struct.unpack('<f', bs.read(4))
+            self.cylindre_cols.append((x,y,z))
+            bs.seek(2 * 2, io.SEEK_CUR)
         print(cylindre_col_count)
         
         unknown7_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-        bs.seek(unknown7_count * 4 * 4, io.SEEK_CUR)
+        for i in range(0, unknown7_count):
+            x = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+            y = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+            z = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+            self.unknown7s.append((x, y, z))
+            bs.seek(1 * 2, io.SEEK_CUR)
         print(unknown7_count)
         
         unknown8_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -163,7 +173,17 @@ class MeshZ:
         print(unknown13_count)
         
         unknown16_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-        bs.seek(unknown16_count * 8 * 4, io.SEEK_CUR)
+        for i in range(0, unknown16_count):
+            [x] = struct.unpack('<f', bs.read(4))
+            [y] = struct.unpack('<f', bs.read(4))
+            [z] = struct.unpack('<f', bs.read(4))
+            self.unknown16s.append((x,y,z))
+            bs.seek(2 * 2, io.SEEK_CUR)
+            [x] = struct.unpack('<f', bs.read(4))
+            [y] = struct.unpack('<f', bs.read(4))
+            [z] = struct.unpack('<f', bs.read(4))
+            self.unknown16s.append((x,y,z))
+            bs.seek(2 * 2, io.SEEK_CUR)
         print(unknown16_count)
         
         pair_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -182,7 +202,12 @@ class MeshZ:
             unknown15_indicies_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
             bs.seek(unknown15_indicies_count * 1 * 2, io.SEEK_CUR)
             unknown15_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-            bs.seek(unknown15_count * 2 * 4, io.SEEK_CUR)
+            for j in range(0, unknown15_count):
+                x = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+                y = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+                z = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+                self.unknown15s.append((x, y, z))
+                bs.seek(1 * 2, io.SEEK_CUR)
         print(morph_count)
         
         unknown12_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -238,11 +263,38 @@ class ImportAsoboMeshZ(Operator, ImportHelper):
             me.update()
             context.scene.collection.objects.link(ob)
         
-        
         ob_name = "meshz" + str(10)
         me = bpy.data.meshes.new(ob_name + "Mesh")
         ob = bpy.data.objects.new(ob_name, me)
         me.from_pydata(mesh.unknown12s, [], [])
+        me.update()
+        context.scene.collection.objects.link(ob)
+        
+        ob_name = "meshz" + str(20)
+        me = bpy.data.meshes.new(ob_name + "Mesh")
+        ob = bpy.data.objects.new(ob_name, me)
+        me.from_pydata(mesh.unknown15s, [], [])
+        me.update()
+        context.scene.collection.objects.link(ob)
+        
+        ob_name = "meshz" + str(30)
+        me = bpy.data.meshes.new(ob_name + "Mesh")
+        ob = bpy.data.objects.new(ob_name, me)
+        me.from_pydata(mesh.unknown16s, [], [])
+        me.update()
+        context.scene.collection.objects.link(ob)
+        
+        ob_name = "meshz" + str(40)
+        me = bpy.data.meshes.new(ob_name + "Mesh")
+        ob = bpy.data.objects.new(ob_name, me)
+        me.from_pydata(mesh.cylindre_cols, [], [])
+        me.update()
+        context.scene.collection.objects.link(ob)
+        
+        ob_name = "meshz" + str(50)
+        me = bpy.data.meshes.new(ob_name + "Mesh")
+        ob = bpy.data.objects.new(ob_name, me)
+        me.from_pydata(mesh.unknown7s, [], [])
         me.update()
         context.scene.collection.objects.link(ob)
         
