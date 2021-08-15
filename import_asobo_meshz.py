@@ -43,9 +43,11 @@ class MeshZ:
     unknown7s = []
     vertex_buffers = []
     index_buffers = []
+    unknown11s = []
     unknown12s = []
     unknown16s = []
     unknown15s = []
+    unknown15_indicies = []
     
     def __init__(self, data):
         # Header
@@ -94,25 +96,23 @@ class MeshZ:
         
         cylindre_col_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
         for i in range(0, cylindre_col_count):
-            [x] = struct.unpack('<f', bs.read(4))
-            [y] = struct.unpack('<f', bs.read(4))
-            [z] = struct.unpack('<f', bs.read(4))
-            self.cylindre_cols.append((x,y,z))
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            min_vertex = (x,y,z)
             bs.seek(2 * 2, io.SEEK_CUR)
-            [x] = struct.unpack('<f', bs.read(4))
-            [y] = struct.unpack('<f', bs.read(4))
-            [z] = struct.unpack('<f', bs.read(4))
-            self.cylindre_cols.append((x,y,z))
-            bs.seek(2 * 2, io.SEEK_CUR)
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            max_vertex = (x,y,z)
+            unknown7s_index = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            unknown = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            self.cylindre_cols.append((min_vertex, max_vertex))
         print(cylindre_col_count)
         
         unknown7_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
         for i in range(0, unknown7_count):
-            x = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
-            y = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
-            z = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
+            x = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            y = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            z = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            unknown = int.from_bytes(bs.read(2), byteorder='little', signed=False)
             self.unknown7s.append((x, y, z))
-            bs.seek(1 * 2, io.SEEK_CUR)
         print(unknown7_count)
         
         unknown8_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -162,7 +162,17 @@ class MeshZ:
         print(index_buffer_count)
         
         unknown11_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-        bs.seek(unknown11_count * 15 * 4, io.SEEK_CUR)
+        for i in range(0, unknown11_count):
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            self.unknown11s.append((x,y,z))
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            self.unknown11s.append((x,y,z))
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            self.unknown11s.append((x,y,z))
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            self.unknown11s.append((x,y,z))
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            self.unknown11s.append((x,y,z))
         print(unknown11_count)
         
         unknown13_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -174,16 +184,14 @@ class MeshZ:
         
         unknown16_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
         for i in range(0, unknown16_count):
-            [x] = struct.unpack('<f', bs.read(4))
-            [y] = struct.unpack('<f', bs.read(4))
-            [z] = struct.unpack('<f', bs.read(4))
-            self.unknown16s.append((x,y,z))
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            min_vertex = (x,y,z)
             bs.seek(2 * 2, io.SEEK_CUR)
-            [x] = struct.unpack('<f', bs.read(4))
-            [y] = struct.unpack('<f', bs.read(4))
-            [z] = struct.unpack('<f', bs.read(4))
-            self.unknown16s.append((x,y,z))
-            bs.seek(2 * 2, io.SEEK_CUR)
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            max_vertex = (x,y,z)
+            pairs_index = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            unknown = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+            self.unknown16s.append((min_vertex, max_vertex))
         print(unknown16_count)
         
         pair_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -200,7 +208,9 @@ class MeshZ:
             bs.seek(name_size * 1 * 1, io.SEEK_CUR)
             bs.seek(1 * 4 + 1 * 2, io.SEEK_CUR)
             unknown15_indicies_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-            bs.seek(unknown15_indicies_count * 1 * 2, io.SEEK_CUR)
+            for j in range(0, unknown15_indicies_count):
+                x = int.from_bytes(bs.read(2), byteorder='little', signed=False)
+                self.unknown15_indicies.append(x)
             unknown15_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
             for j in range(0, unknown15_count):
                 x = int.from_bytes(bs.read(2), byteorder='little', signed=True) / 1024
@@ -263,40 +273,65 @@ class ImportAsoboMeshZ(Operator, ImportHelper):
             me.update()
             context.scene.collection.objects.link(ob)
         
-        ob_name = "meshz" + str(10)
-        me = bpy.data.meshes.new(ob_name + "Mesh")
-        ob = bpy.data.objects.new(ob_name, me)
-        me.from_pydata(mesh.unknown12s, [], [])
-        me.update()
-        context.scene.collection.objects.link(ob)
+        #if mesh.unknown12s:
+        #    ob_name = "meshz" + str(10)
+        #    me = bpy.data.meshes.new(ob_name + "Mesh")
+        #    ob = bpy.data.objects.new(ob_name, me)
+        #    me.from_pydata(mesh.unknown12s, [], [])
+        #    me.update()
+        #    context.scene.collection.objects.link(ob)
         
-        ob_name = "meshz" + str(20)
-        me = bpy.data.meshes.new(ob_name + "Mesh")
-        ob = bpy.data.objects.new(ob_name, me)
-        me.from_pydata(mesh.unknown15s, [], [])
-        me.update()
-        context.scene.collection.objects.link(ob)
+        #if mesh.unknown15s:
+        #    ob_name = "meshz" + str(20)
+        #    me = bpy.data.meshes.new(ob_name + "Mesh")
+        #    ob = bpy.data.objects.new(ob_name, me)
+        #    me.from_pydata(mesh.unknown15s, [], [])
+        #    me.update()
+        #    context.scene.collection.objects.link(ob)
         
-        ob_name = "meshz" + str(30)
-        me = bpy.data.meshes.new(ob_name + "Mesh")
-        ob = bpy.data.objects.new(ob_name, me)
-        me.from_pydata(mesh.unknown16s, [], [])
-        me.update()
-        context.scene.collection.objects.link(ob)
+        if mesh.unknown16s:
+            ob_name = "meshz" + str(30)
+            me = bpy.data.meshes.new(ob_name + "Mesh")
+            ob = bpy.data.objects.new(ob_name, me)
+            vertices = []
+            for e in mesh.unknown16s:
+                vertices.append(e[0])
+                vertices.append(e[1])
+            me.from_pydata(vertices, [(i * 2, i * 2 + 1) for i in range(0, len(mesh.unknown16s))], [])
+            me.update()
+            context.scene.collection.objects.link(ob)
+    
+        if mesh.cylindre_cols:
+            ob_name = "meshz" + str(40)
+            me = bpy.data.meshes.new(ob_name + "Mesh")
+            ob = bpy.data.objects.new(ob_name, me)
+            vertices = []
+            for e in mesh.cylindre_cols:
+                vertices.append(e[0])
+                vertices.append(e[1])
+            me.from_pydata(vertices, [(i * 2, i * 2 + 1) for i in range(0, len(mesh.cylindre_cols))], [])
+            me.update()
+            context.scene.collection.objects.link(ob)
         
-        ob_name = "meshz" + str(40)
-        me = bpy.data.meshes.new(ob_name + "Mesh")
-        ob = bpy.data.objects.new(ob_name, me)
-        me.from_pydata(mesh.cylindre_cols, [], [])
-        me.update()
-        context.scene.collection.objects.link(ob)
+        if mesh.unknown7s:
+            ob_name = "meshz" + str(50)
+            me = bpy.data.meshes.new(ob_name + "Mesh")
+            ob = bpy.data.objects.new(ob_name, me)
+            indices = []
+            for x in mesh.unknown7s:
+                indices.append((x[0], x[1], x[2]))
+            me.from_pydata(mesh.unknown12s, [], indices)
+            me.update()
+            context.scene.collection.objects.link(ob)
         
-        ob_name = "meshz" + str(50)
-        me = bpy.data.meshes.new(ob_name + "Mesh")
-        ob = bpy.data.objects.new(ob_name, me)
-        me.from_pydata(mesh.unknown7s, [], [])
-        me.update()
-        context.scene.collection.objects.link(ob)
+        if mesh.unknown11s:
+            ob_name = "meshz" + str(60)
+            me = bpy.data.meshes.new(ob_name + "Mesh")
+            ob = bpy.data.objects.new(ob_name, me)
+            indices = []
+            me.from_pydata(mesh.unknown11s, [], [])
+            me.update()
+            context.scene.collection.objects.link(ob)
         
         return {'FINISHED'}
 
