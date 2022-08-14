@@ -5,40 +5,12 @@ from bpy.types import Operator
 import io, struct, collections, math, numpy
 
 
-def snorm16_to_float(x):
-    return max(x / 32767.0, -1.0)
-
-
-def normalize_qtangent(qtangent):
-    norm = numpy.linalg.norm(qtangent)
-    if norm != 0:
-        return qtangent / norm
-    return qtangent
-
-
-def decode_qtangent(qtangent):
-    (i, j, k, w) = qtangent
-    
-    fTx  = 2.0 * i
-    fTy  = 2.0 * j
-    fTz  = 2.0 * k
-    fTwx = fTx * w
-    fTwy = fTy * w
-    fTwz = fTz * w
-    fTxx = fTx * i
-    fTxy = fTy * i
-    fTxz = fTz * i
-    fTyz = fTz * j
-    fTyy = fTy * j
-    fTzz = fTz * k
-     
-    normal = (1.0-(fTyy+fTzz), fTxy+fTwz, fTxz-fTwy)
-    tangent = ( fTxy-fTwz, 1.0-(fTxx+fTzz), fTyz+fTwx )
-    bitangent = numpy.cross(normal, tangent) * numpy.sign(w)
-    
-    return normal, tangent, bitangent
+def snorm_to_float(x):
+    return x / 255.0 * 2 - 1
 
 class MeshZ:
+    header_points = []
+    
     cylindre_cols = []
     unknown7s = []
     vertex_buffers = []
@@ -59,7 +31,28 @@ class MeshZ:
         assert class_header.compressed_size == 0, "Compressed objects not allowed"
         
         # Links
-        bs.seek(class_header.links_size, io.SEEK_CUR) # skip links
+        bs.seek(1 * 24 * 4 + 1 * 1 * 2, io.SEEK_CUR)
+        
+        crc32_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+        bs.seek(crc32_count * 1 * 4, io.SEEK_CUR)
+        print(crc32_count)
+        
+        bs.seek(1 * 3 * 4, io.SEEK_CUR)
+        
+        unknown3_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+        for i in range(0, unknown3_count):
+            (x, y, z) = struct.unpack('<fff', bs.read(12))
+            (a) = struct.unpack('<f', bs.read(4))
+            unknown4 = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+            name_crc32 = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+            self.header_points.append((x, y, z))
+        print(unknown3_count)
+        
+        unknown4_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+        for i in range(0, unknown4_count):
+            bs.seek(1 * 16 * 4, io.SEEK_CUR)
+            bs.seek(1 * 2 * 4, io.SEEK_CUR)
+        print(unknown4_count)
         
         # Data
         strip_vertices_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -119,9 +112,9 @@ class MeshZ:
         bs.seek(unknown8_count * 8 * 4, io.SEEK_CUR)
         print(unknown8_count)
         
-        s = struct.Struct('<fffhhhhffff')
-        Vertex = collections.namedtuple('Vertex', 'x y z i j k w u0 v0 u1 v1')
-        VertexBuffer = collections.namedtuple('VertexBuffer', 'id positions normals tangents bitangents uvs')
+        s = struct.Struct('<fffBBBBBBBBffff')
+        Vertex = collections.namedtuple('Vertex', 'x y z tx ty tz tp nx ny nz np u0 v0 u1 v1')
+        VertexBuffer = collections.namedtuple('VertexBuffer', 'id positions normals tangents uvs')
         vertex_buffer_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
         for i in range(0, vertex_buffer_count):
             vertex_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -130,20 +123,15 @@ class MeshZ:
             positions = []
             normals = []
             tangents = []
-            bitangents = []
             uvs = []
             for j in range(0, vertex_count):
                 vertex = Vertex._make(s.unpack(bs.read(s.size)))
                 positions.append((vertex.x, vertex.y, vertex.z))
-                qtangent = (snorm16_to_float(vertex.i), snorm16_to_float(vertex.j), snorm16_to_float(vertex.k), snorm16_to_float(vertex.w))
-                qtangent = normalize_qtangent(qtangent)
-                normal, tangent, bitangent = decode_qtangent(qtangent)
-                normals.append(normal)
-                tangents.append(tangent)
-                bitangents.append(bitangent)
+                tangents.append((snorm_to_float(vertex.tx), snorm_to_float(vertex.ty), snorm_to_float(vertex.tz)))
+                normals.append((snorm_to_float(vertex.nx), snorm_to_float(vertex.ny), snorm_to_float(vertex.nz)))
                 uvs.append((vertex.u0, vertex.v0))
                 bs.seek(vertex_size - s.size, io.SEEK_CUR)
-            self.vertex_buffers.append(VertexBuffer._make((id, positions, normals, tangents, bitangents, uvs)))
+            self.vertex_buffers.append(VertexBuffer._make((id, positions, normals, tangents, uvs)))
         print(vertex_buffer_count)
         
         IndexBuffer = collections.namedtuple('IndexBuffer', 'id data')
@@ -330,6 +318,15 @@ class ImportAsoboMeshZ(Operator, ImportHelper):
             ob = bpy.data.objects.new(ob_name, me)
             indices = []
             me.from_pydata(mesh.unknown11s, [], [])
+            me.update()
+            context.scene.collection.objects.link(ob)
+        
+        if mesh.header_points:
+            ob_name = "meshz" + str(70)
+            me = bpy.data.meshes.new(ob_name + "Mesh")
+            ob = bpy.data.objects.new(ob_name, me)
+            indices = []
+            me.from_pydata(mesh.header_points, [], [])
             me.update()
             context.scene.collection.objects.link(ob)
         
