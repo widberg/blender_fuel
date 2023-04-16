@@ -42,3 +42,75 @@ def crc32(data, hash = 0):
     for c in data:
         hash = (hash >> 8) ^ crc32_table[(tolower(c) ^ hash) & 0xff]
     return hash
+
+crc32_reverse_lookup = {
+    3243480878 : "LOCAL_LOOKAT",
+    3355622209 : "LOCAL_ATTACH",
+    3448189790 : "LOCAL_LIMIT",
+    1178470142 : "DYN_POINT1",
+    1266491431 : "DYN_POINT2",
+    1337736592 : "DYN_POINT3",
+    1375432085 : "DYN_POINT4",
+    1429893154 : "DYN_POINT5",
+    1484347131 : "DYN_POINT6",
+    1555581772 : "DYN_POINT7",
+    4092384112 : "DYN_POINT8",
+    1614211910 : "DYN_POINT9",
+    1631719061 : "DYN_POINT10",
+    1703088930 : "DYN_POINT11",
+    1757427195 : "DYN_POINT12",
+    1812015180 : "DYN_POINT13",
+    1917220937 : "DYN_POINT14",
+    1988584958 : "DYN_POINT15",
+    2076459815 : "DYN_POINT16",
+    4217370453 : "SFX_FIRE1",
+    342724588 : "SFX_EXHAUST1",
+    422488373 : "SFX_EXHAUST2",
+    502248578 : "SFX_EXHAUST3",
+    61400199 : "SFX_EXHAUST4",
+    124385584 : "SFX_EXHAUST5",
+    170581993 : "SFX_EXHAUST6",
+    250331742 : "SFX_EXHAUST7",
+    916750307 : "SFX_EXHAUST8",
+    845505108 : "SFX_EXHAUST9",
+    612613378 : "SFX_EXHAUST10",
+    541237429 : "SFX_EXHAUST11",
+    755074668 : "SFX_EXHAUST12",
+    700488667 : "SFX_EXHAUST13",
+    931646430 : "SFX_EXHAUST14",
+    860280425 : "SFX_EXHAUST15",
+    1040576688 : "SFX_EXHAUST16",
+    2234468230 : "DURL",
+    917337438 : "DYN_DAMAGE",
+    3491467995 : "DYN_XFILTER",
+    1699973321 : "DYN_YFILTER",
+    354920422 : "DYN_ZFILTER",
+    1676256635 : "DYN_TENSION",
+    1062800321 : "DYN_VCOL",
+    795155901 : "DYN_WINDPOW",
+    318847781 : "DYN_EXTPOW",
+    3678433905 : "DYN_MVRATIO",
+    3134916619 : "DYN_VISCOSITY",
+    1081475432 : "DYN_STATICROTATION",
+    320233663 : "DYN_R",
+    1669929925 : "DYN_L",
+    2360085526 : "DYN_BR",
+    2821249261 : "DYN_FR",
+    4231231340 : "DYN_BL",
+    3635913623 : "DYN_FL",
+}
+
+
+def string_from_crc32(hash):
+    if hash in crc32_reverse_lookup.keys():
+        return crc32_reverse_lookup[hash]
+    return str(hash)
+
+
+def crc32_from_string(string):
+    components = string.split('_')
+    first_component = components[0].trim()
+    try:
+        return int(first_component)
+    except ValueError:
+        return crc32(string)

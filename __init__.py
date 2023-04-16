@@ -21,7 +21,8 @@ class ImportFUELMeshZ(Operator, ImportHelper):
     )
 
     def execute(self, context):
-        mesh_z.import_from_object_directory_path(self.filepath)
+        collection = mesh_z.import_from_object_directory_path(self.filepath)
+        bpy.context.scene.collection.children.link(collection)
 
         return {'FINISHED'}
 
