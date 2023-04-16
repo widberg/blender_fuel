@@ -4,18 +4,38 @@ from bpy.props import StringProperty
 from bpy.types import Operator
 import io, struct, collections, math, numpy
 
+import random
+
 
 def snorm_to_float(x):
     return x / 255.0 * 2 - 1
 
+def get_material(material_crc32):
+    material_name = str(material_crc32)
+    mat = bpy.data.materials.get(material_name)
+
+    if mat:
+        return mat
+    
+    mat = bpy.data.materials.new(name=material_name)
+
+    random.seed(material_crc32)
+    r = random.uniform(0, 1)
+    g = random.uniform(0, 1)
+    b = random.uniform(0, 1)
+    mat.diffuse_color = (r, g, b, 1)
+    return mat
+
 class MeshZ:
     header_points = []
     
+    material_crc32s = []
     cylindre_cols = []
     unknown7s = []
     vertex_buffers = []
     index_buffers = []
     unknown11s = []
+    vertex_groups = []
     unknown12s = []
     unknown16s = []
     unknown15s = []
@@ -84,7 +104,9 @@ class MeshZ:
         print(unknown4_count)
         
         material_crc32_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-        bs.seek(material_crc32_count * 1 * 4, io.SEEK_CUR)
+        for i in range(0, material_crc32_count):
+            material_crc32 = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+            self.material_crc32s.append(material_crc32)
         print(material_crc32_count)
         
         cylindre_col_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
@@ -162,13 +184,16 @@ class MeshZ:
             (x, y, z) = struct.unpack('<fff', bs.read(12))
             self.unknown11s.append((x,y,z))
         print(unknown11_count)
-        
-        unknown13_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
-        for i in range(0, unknown13_count):
-            bs.seek(24 * 2, io.SEEK_CUR)
+
+        s = struct.Struct('<LLLLLHHLLLLLHH')
+        VertexGroup = collections.namedtuple('VertexGroup', 'vertex_buffer_index index_buffer_index z0 z1 flags vertex_buffer_index_begin vertex_buffer_index_end vertex_count index_buffer_index_begin face_count z2 z3 vertex_size material_index')
+        vertex_groups_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
+        for i in range(0, vertex_groups_count):
+            vertex_group = VertexGroup._make(s.unpack(bs.read(s.size)))
+            self.vertex_groups.append(vertex_group)
             unknown1_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
             bs.seek(unknown1_count * 7 * 4, io.SEEK_CUR)
-        print(unknown13_count)
+        print(vertex_groups_count)
         
         unknown16_count = int.from_bytes(bs.read(4), byteorder='little', signed=False)
         for i in range(0, unknown16_count):
@@ -261,6 +286,19 @@ class ImportAsoboMeshZ(Operator, ImportHelper):
             me.update()
             context.scene.collection.objects.link(ob)
         
+        for ob in bpy.data.objects:
+            for i in range(0, len(mesh.material_crc32s)):
+                material_crc32 = mesh.material_crc32s[i]
+                ob.data.materials.append(get_material(material_crc32))
+
+        for vertex_group in mesh.vertex_groups:
+            ob = bpy.data.objects["meshz" + str(vertex_group.index_buffer_index)]
+            polygon_index_begin = vertex_group.index_buffer_index_begin // 3
+            polygon_index_end = polygon_index_begin + vertex_group.face_count
+            for j in range(polygon_index_begin, polygon_index_end):
+                p = ob.data.polygons[j]
+                p.material_index = vertex_group.material_index
+
         #if mesh.unknown12s:
         #    ob_name = "meshz" + str(10)
         #    me = bpy.data.meshes.new(ob_name + "Mesh")
