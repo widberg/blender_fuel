@@ -49,7 +49,8 @@ def normalize_mesh_object_for_export(ob):
     # TODO: Split vertices if multiple UV coordinates
     # https://github.com/OpenSAGE/OpenSAGE.BlenderPlugin/issues/63
     # https://blender.stackexchange.com/a/121741
-    # TODO: Make this operation nondestructive
+    # TODO: Apply normalization only to exported data. Do not modify any objects in Blender.
+    # TODO: Apply rotation to make Y up
 
 def export_to_object_directory_path(directory_path):
     object_json_path = os.path.join(directory_path, 'object.json')
@@ -63,8 +64,7 @@ def export_to_object_directory_path(directory_path):
         for vert_idx, loop_idx in zip(face.vertices, face.loop_indices):
             uv_coords = me.uv_layers.active.data[loop_idx].uv
             vertices[vert_idx]['uv'] = [uv_coords.x, 1 - uv_coords.y]
-            tangent = me.loops[loop_idx].tangent
-            vertices[vert_idx]['tangent'] = tangent[0:3]
+            vertices[vert_idx]['tangent'] = me.loops[loop_idx].tangent[0:3]
 
     indices = list(chain.from_iterable([[l.vertices[2], l.vertices[1], l.vertices[0]] for l in me.loop_triangles]))
 

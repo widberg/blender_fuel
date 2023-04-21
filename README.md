@@ -8,11 +8,11 @@ Blender scripts for FUEL's object formats.
 
 ### `addons/blender_fuel`
 
-The scripts in this directory operate on the object file directories. They are intended to be loaded as an addon and interacted with using the GUI.
+The scripts in this directory operate on the object file directories, e.g. `.Mesh_Z.d`, extracted by the [dpc tool](https://github.com/widberg/dpc) in recursive mode. They are intended to be loaded as an addon and interacted with using the GUI.
 
 ### `legacy`
 
-The scripts in this directory operate directly on the object files. They are intended to be run from the "Scripting" view. Currently these scripts are more complete than the new addon scripts. These scripts will be removed once the new scripts reach feature parity with them.
+The scripts in this directory operate directly on the object files, e.g. `.Mesh_Z`, extracted by the [dpc tool](https://github.com/widberg/dpc). They are intended to be run from the "Scripting" view. Currently these scripts are more complete than the new addon scripts. These scripts will be removed once the new scripts reach feature parity with them.
 
 ## Related Information
 
